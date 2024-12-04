@@ -111,20 +111,16 @@ class CarlaControl():
             self.create_car(i, npc_cars[i][0][1], npc_cars[i][0][2], npc_cars[i][0][3], npc_cars[i][0][4], npc_cars[i][0][5], npc_cars[i][0][6], car_model="model3")
 
         print('moving car')
-        def move_vehicles(time_count):
+        for time_count in range(1, len(npc_cars[0])):
             self.move_car(0, my_car[time_count][1], my_car[time_count][2], my_car[time_count][3], my_car[time_count][4], my_car[time_count][5], my_car[time_count][6])
+            print(f"Self-car position: {my_car[time_count][1]}, {my_car[time_count][2]}")
             for i in range(len(npc_cars)):
                 self.move_car(i, npc_cars[i][time_count][1], npc_cars[i][time_count][2], npc_cars[i][time_count][3], npc_cars[i][time_count][4], npc_cars[i][time_count][5], npc_cars[i][time_count][6])
 
-        threads = []
-        for time_count in range(1, len(npc_cars[0])):
-            t = threading.Thread(target=move_vehicles, args=(time_count,))
-            threads.append(t)
-            t.start()
-            time.sleep(0.1)
+            # Wait for the simulator to tick
+            self.world.tick()
+            time.sleep(0.05)  # Adjust sleep for desired update rate
 
-        for t in threads:
-            t.join()
 
 class HighwayPathToCarlaPath():
     def __init__(self, path_lists):
