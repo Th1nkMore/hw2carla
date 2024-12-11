@@ -1,11 +1,11 @@
 import copy
 import numpy as np
 import main
-SP_NUM = 1
+SP_NUM = 20
 
-def data_mix():
-    data = np.load('car_data_mix.npy')
-    data = data[:-300]
+def data_mix(scene = 'ChangeLane'):
+    path = 'data/' + scene + '/car_data_mix.npy'
+    data = np.load(path)
     return data
 
 def player_data_split(datas):
@@ -39,7 +39,6 @@ def player_data_split(datas):
     return player_data, npc_data
 
 
-
 def route_extend(path,sp_num):
     ans=[]
     count_turn=0
@@ -57,11 +56,14 @@ def route_extend(path,sp_num):
 
 
 if __name__ == '__main__':
-    data = data_mix()
+    data = data_mix(scene='ChangeLane')
+    for Fid, frame in enumerate(data):
+        for Cid, car in enumerate(frame):
+            with open('data/ChangeLane/car_data_mix.txt', 'a') as f:
+                f.write(f"Frame: {Fid}, Car: {Cid}, Data: {car}\n")
+    # hero_path, npcs_path = player_data_split(data)
 
-    hero_path, npcs_path = player_data_split(data)
-
-    carla_path = main.HighwayPathToCarlaPath(npcs_path).exchange_to_town06()
-    player_path = main.HighwayPathToCarlaPath([hero_path]).exchange_to_town06()[0]
-
+    # carla_path = main.HighwayPathToCarlaPath(npcs_path).exchange_to_town06()
+    # player_path = main.HighwayPathToCarlaPath([hero_path]).exchange_to_town06()[0]
+    # print(len(carla_path))
     
