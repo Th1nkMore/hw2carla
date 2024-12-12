@@ -34,7 +34,7 @@ def process_img(data):
     threading.Thread(target=cv2.imwrite, args=(filePath, i3)).start()
     return i3 / 255.0
 
-def img2video():
+def img2video(scene='ChangeLane', view='Top'):
     img_array = []
     file_list = sorted(glob.glob('test/*.jpg'), key=lambda x: int(x.split('/')[-1].split('.')[0].split('t')[-1]))
     for filename in file_list:
@@ -42,21 +42,24 @@ def img2video():
         height, width, _ = img.shape
         size = (width, height)
         img_array.append(img)
-    out = cv2.VideoWriter('highway2carla.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15, size)
+    videoName = f'highway2carla_{scene}_{view}.mp4'
+    out = cv2.VideoWriter(videoName, cv2.VideoWriter_fourcc(*'mp4v'), 15, size)
     for i in range(len(img_array)):
         out.write(img_array[i])
     out.release()
 
 class CarlaControl():
-    def __init__(self, ip='localhost', port=2000):
+    def __init__(self, ip='localhost', port=2000, view='Top'):
         self.client = carla.Client(ip, port)
         self.client.set_timeout(10.0)
         self.world = self.client.get_world()
-        self.spectator = self.world.get_spectator()
+
         self.settings = self.world.get_settings()
         self.settings.synchronous_mode = True # Enables synchronous mode
         self.settings.fixed_delta_seconds = 0.01
         self.world.apply_settings(self.settings)
+
+        self.view = view
 
         self.actor_list =  []
 
@@ -101,23 +104,25 @@ class CarlaControl():
         cam_bp.set_attribute("fov", "110")
         cam_bp.set_attribute("sensor_tick", "0.05")
 
-        # First camera
-        # spawn_point = carla.Transform(carla.Location(x=1.5, z=1.5))
-        # sensor = self.world.try_spawn_actor(cam_bp, spawn_point, attach_to=player_car)
-        # if sensor is not None:
-        #     sensor.listen(lambda data: process_img(data))
-        #     self.actor_list.append([-100, sensor])
-        # else:
-        #     print('Failed to create first camera sensor')
+        if self.view == 'Front':
+            spawn_point = carla.Transform(carla.Location(x=1.5, z=1.5))
+            sensor = self.world.try_spawn_actor(cam_bp, spawn_point, attach_to=player_car)
+            if sensor is not None:
+                sensor.listen(lambda data: process_img(data))
+                self.actor_list.append([-100, sensor])
+            else:
+                raise ValueError('Failed to create front view camera sensor')
 
-        # Second camera
-        spawn_point = carla.Transform(carla.Location(x=0, z=25), Rotation(yaw=90, pitch=-90))
-        sensor = self.world.try_spawn_actor(cam_bp, spawn_point, attach_to=player_car)
-        if sensor is not None:
-            sensor.listen(lambda data: process_img(data))
-            self.actor_list.append([-110, sensor])
+        elif self.view == 'Top':
+            spawn_point = carla.Transform(carla.Location(x=0, z=25), Rotation(yaw=90, pitch=-90))
+            sensor = self.world.try_spawn_actor(cam_bp, spawn_point, attach_to=player_car)
+            if sensor is not None:
+                sensor.listen(lambda data: process_img(data))
+                self.actor_list.append([-110, sensor])
+            else:
+                raise ValueError('Failed to create top view camera sensor')
         else:
-            print('Failed to create second camera sensor')
+            raise ValueError(f"Unsupported view: {self.view}")
 
     def play_video(self, my_car, npc_cars, player_car_model='audi'):
 
@@ -162,49 +167,49 @@ class HighwayPathToCarlaPath():
         #     for point in path_planning:
         #         point[1] -= min_x
 
-    def exchange_to_town06(self):
-        self.init_pose = [20, 140, 0.08]
-        town06_path = []
+    def exchange_to_town(self, town_id):
+        if town_id == 'Town06' or town_id == 'Town06_Opt':
+            self.init_pose = [20, 140, 0.08]
+            min_x = self.min_x
+        elif town_id == 'Town03':
+            self.init_pose = [0, -1.5, 0.08]
+            min_x = 0
+        else:
+            raise ValueError(f"Unsupported town_id: {town_id}")
+
+        town_path = []
         for point_list in self.path_list:
             tmp_path = []
             for point in point_list:
                 # [frame, x, y, z, pitch, yaw, roll]
-                tmp_path.append([point[0], point[1] + self.init_pose[0] - self.min_x, point[2] + self.init_pose[1], self.init_pose[2], 0, point[3] * 180 / math.pi, 0])
-            town06_path.append(tmp_path)
+                tmp_path.append([point[0], point[1] + self.init_pose[0] - min_x, point[2] + self.init_pose[1], self.init_pose[2], 0, point[3] * 180 / math.pi, 0])
+            town_path.append(tmp_path)
 
-        return town06_path
-    
-    def exchange_to_town03(self):
-        self.init_pose = [0, -1.5, 0.08]
-        town03_path = []
-        for point_list in self.path_list:
-            tmp_path = []
-            for point in point_list:
-                # [frame, x, y, z, pitch, yaw, roll]
-                tmp_path.append([point[0], point[1] + self.init_pose[0], point[2] + self.init_pose[1], self.init_pose[2], 0, point[3] * 180 / math.pi, 0])
-            town03_path.append(tmp_path)
-
-        return town03_path
+        return town_path
 
 if __name__ == '__main__':
-    # try:
-        self_list, actor_list = data.player_data_split(data.data_mix(scene='ChangeLane'))
+    scene = 'ChangeLane'
+    view = 'Top'
+    town_id = 'Town06_Opt'
 
-        carla_path = HighwayPathToCarlaPath(actor_list).exchange_to_town06()
-        player_path = HighwayPathToCarlaPath([self_list]).exchange_to_town06()[0]
+    try:
+        self_list, actor_list = data.player_data_split(data.data_mix(scene=scene))
+
+        carla_path = HighwayPathToCarlaPath(actor_list).exchange_to_town(town_id)
+        player_path = HighwayPathToCarlaPath([self_list]).exchange_to_town(town_id)[0]
 
         carla_control = CarlaControl(ip='10.16.90.246')
         # carla_control = CarlaControl()
-        carla_control.change_map('Town06_Opt')
+        carla_control.change_map(town_id)
         # carla_control.untoggle_layer()
         clean_up()
         time.sleep(2)
         carla_control.play_video(player_path, carla_path, player_car_model='wheeled_robot')
         # carla_control.play_video(player_path, carla_path)
 
-    # except Exception as e:
-    #     print(f"An error occurred: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-    # finally:
+    finally:
         carla_control.close()
-        img2video()
+        img2video(scene=scene, view=view)
